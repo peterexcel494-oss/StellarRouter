@@ -323,6 +323,8 @@ impl RouterMiddleware {
                     // Transition to half-open state for probe call
                     route_call_state.circuit_breaker.is_open = false;
                     route_call_state.circuit_breaker.is_half_open = true;
+                    route_call_state.circuit_breaker.failure_count = 0;
+                    route_call_state.circuit_breaker.opened_at = 0;
                     state_changed = true;
                 } else if route_call_state.circuit_breaker.is_half_open {
                     // Already in half-open state - allow this probe call
@@ -599,6 +601,7 @@ impl RouterMiddleware {
                 if route_call_state.circuit_breaker.is_half_open {
                     route_call_state.circuit_breaker.is_half_open = false;
                     route_call_state.circuit_breaker.failure_count = 0;
+                    route_call_state.circuit_breaker.opened_at = 0;
                 } else if !route_call_state.circuit_breaker.is_open
                     && route_call_state.circuit_breaker.failure_count > 0
                 {
@@ -1165,6 +1168,8 @@ mod tests {
     fn setup() -> (Env, Address, RouterMiddlewareClient<'static>) {
         let env = Env::default();
         env.mock_all_auths();
+        // Start at a non-zero timestamp so opened_at / window_start are always > 0
+        env.ledger().set_timestamp(1000);
         let contract_id = env.register_contract(None, RouterMiddleware);
         let client = RouterMiddlewareClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
@@ -1739,7 +1744,7 @@ mod tests {
         assert_eq!(state_after_window.calls_in_window, 0);
         assert_eq!(
             state_after_window.window_start,
-            env.ledger().timestamp() - 1
+            env.ledger().timestamp()
         );
     }
 
